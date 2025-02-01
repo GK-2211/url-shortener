@@ -3,20 +3,19 @@ import bodyParser from 'body-parser';
 import sql from '../database/db.js'
 import {getAsync, setAsync} from '../redis.js'
 
-
 const router=express.Router();
 
 
 router.use(bodyParser.json({urlencoded:true}));
 
 
-router.get('/analytics/:alias', async (req, res) => {
-    const { alias } = req.params;
-    try {
-        let cachedAnalytics = await getAsync(`analytics:${alias}`);
-        if (cachedAnalytics) {
-            return res.json(JSON.parse(cachedAnalytics));
-        }
+router.get('/analytics', async (req, res) => {
+    const alias = '6kEe1kQ4';
+    // try {
+    //     let cachedAnalytics = await getAsync(`analytics:${alias}`);
+    //     if (cachedAnalytics) {
+    //         return res.json(JSON.parse(cachedAnalytics));
+    //     }
 
         const totalClicksResult = await sql`SELECT COUNT(*) AS totalClicks FROM urlshortener.analytics WHERE alias = ${alias}`;
         const uniqueUsersResult = await sql`SELECT COUNT(DISTINCT ip_address) AS uniqueUsers FROM urlshortener.analytics WHERE alias = ${alias}`;
@@ -63,12 +62,12 @@ router.get('/analytics/:alias', async (req, res) => {
             osType,
             deviceType
         };
-        await setAsync(`analytics:${alias}`, JSON.stringify(analyticsData), 'EX', 60 * 60);
+        // await setAsync(`analytics:${alias}`, JSON.stringify(analyticsData), 'EX', 60 * 60);
 
         res.json(analyticsData);
-    } catch (error) {
-        res.status(500).json({ error: 'Internal server error' });
-    }
+    // } catch (error) {
+    //     res.status(500).json({ error: 'Internal server error' });
+    // }
 });
 
 export default router;
