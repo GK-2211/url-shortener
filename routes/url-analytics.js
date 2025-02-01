@@ -1,7 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import sql from '../database/db.js';
-import { user_email } from '../auth.js';
+import {user_email } from '../auth.js';
 
 const router = express.Router();
 
@@ -14,6 +14,8 @@ router.use(bodyParser.json({ urlencoded: true }));
  *     summary: Get analytics for a specific alias
  *     description: Retrieve analytics for a specific alias.
  *     tags: [URL Analytics]
+ *     security:
+ *       - cookieAuth: []
  *     responses:
  *       200:
  *         description: Analytics data retrieved successfully.
@@ -60,8 +62,8 @@ router.use(bodyParser.json({ urlencoded: true }));
  *       500:
  *         description: Internal server error.
  */
-router.get('/analytics', async (req, res) => {
-    const alias = '6kEe1kQ4';
+router.get('/analytics/:alias', async (req, res) => {
+    const { alias } = req.params;
     try {
         const totalClicksResult = await sql`SELECT COUNT(*) AS totalClicks FROM urlshortener.analytics WHERE alias = ${alias}`;
         const uniqueUsersResult = await sql`SELECT COUNT(DISTINCT ip_address) AS uniqueUsers FROM urlshortener.analytics WHERE alias = ${alias}`;
@@ -114,7 +116,6 @@ router.get('/analytics', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
 /**
  * @swagger
  * /analytics/topic/{topic}:
@@ -122,6 +123,8 @@ router.get('/analytics', async (req, res) => {
  *     summary: Retrieve analytics for all short URLs grouped under a specific topic.
  *     description: Retrieve analytics for all short URLs grouped under a specific topic, allowing users to assess the performance of their links based on categories.
  *     tags: [URL Analytics]
+ *     security:
+ *       - cookieAuth: []
  *     parameters:
  *       - in: path
  *         name: topic
@@ -233,14 +236,15 @@ router.get('/analytics/topic/:topic', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
 /**
  * @swagger
- * /analytics/overall:
+ * /api/analytics/overall:
  *   get:
  *     summary: Retrieve overall analytics for all short URLs created by the authenticated user.
  *     description: Retrieve overall analytics for all short URLs created by the authenticated user, providing a comprehensive view of their link performance.
  *     tags: [URL Analytics]
+ *     security:
+ *       - cookieAuth: []
  *     responses:
  *       200:
  *         description: Analytics data retrieved successfully.
@@ -271,9 +275,9 @@ router.get('/analytics/topic/:topic', async (req, res) => {
  *                     properties:
  *                       osName:
  *                         type: string
- *                         uniqueClicks:
+ *                       uniqueClicks:
  *                         type: number
- *                         uniqueUsers:
+ *                       uniqueUsers:
  *                         type: number
  *                 deviceType:
  *                   type: array
@@ -282,9 +286,9 @@ router.get('/analytics/topic/:topic', async (req, res) => {
  *                     properties:
  *                       deviceName:
  *                         type: string
- *                         uniqueClicks:
+ *                       uniqueClicks:
  *                         type: number
- *                         uniqueUsers:
+ *                       uniqueUsers:
  *                         type: number
  *       401:
  *         description: Unauthorized.
@@ -292,9 +296,6 @@ router.get('/analytics/topic/:topic', async (req, res) => {
  *         description: Internal server error.
  */
 router.get('/analytics/overall', async (req, res) => {
-    if (!req.isAuthenticated || !req.isAuthenticated()) {
-        return res.redirect('/auth/google');
-    }
     try {
         const totalUrlsResult = await sql`
             SELECT COUNT(*) AS totalUrls

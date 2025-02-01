@@ -44,7 +44,7 @@ app.get('/auth/google',
 app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/' }),
     (req, res) => {
-        res.redirect('/api/analytics');
+        res.redirect('/api-docs');
     }
 );
 
