@@ -1,7 +1,6 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import sql from '../database/db.js';
-import rateLimit from 'express-rate-limit';
 import { getAsync, setAsync } from '../redis.js';
 import { nanoid } from 'nanoid';
 import {user_email, token } from '../auth.js';
@@ -12,10 +11,11 @@ const router = express.Router();
 router.use(bodyParser.json({ urlencoded: true }));
 
 router.post('/shorten', async (req, res) => {
+    let queryResult;
     if (!req.isAuthenticated || !req.isAuthenticated()) {
         return res.redirect('/auth/google');
     }
-    const { url, customAlias } = req.body;
+    const { url, customAlias, topic } = req.body;
     let id = customAlias;
     if (!url) {
         return res.status(400).json({ error: 'URL is required' });
@@ -24,12 +24,11 @@ router.post('/shorten', async (req, res) => {
         id = nanoid(8);
     }
     try {
-        await sql`INSERT INTO urlshortener.url_data(alias, originalurl, created_by) VALUES(${id}, ${url}, ${user_email})`;
-        //await setAsync(id, url);
+        queryResult = await sql`INSERT INTO urlshortener.url_data(alias, originalurl, created_by, topic) VALUES(${id}, ${url}, ${user_email}, ${topic}) Returning *`;
     } catch (error) {
         return res.status(400).json({ error: 'Same name alias already exists' });
     }
-    res.status(201).json({ id, shortUrl: `http://localhost:3000/urls/${id}`, originalUrl: url });
+    res.status(201).json({ shortUrl: `http://localhost:3000/urls/${id}`, created_at: queryResult[0].created_at});
 });
 
 router.get('/shorten/:alias', async (req, res) => {
@@ -53,7 +52,6 @@ router.get('/shorten/:alias', async (req, res) => {
 
         await sql`INSERT INTO urlshortener.analytics(alias, timestamp, user_agent, ip_address, os_name, device_type) VALUES(${alias}, ${timestamp}, ${userAgent}, ${ipAddress}, ${osType}, ${deviceType})`;
         res.redirect(originalUrl);
-        console.log(token);
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }
