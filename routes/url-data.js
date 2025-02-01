@@ -1,22 +1,32 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import sql from '../database/db.js';
+import rateLimit from 'express-rate-limit';
 import { getAsync, setAsync } from '../redis.js';
 import { nanoid } from 'nanoid';
 import { user_email } from '../auth.js';
-import { getOS, getDeviceType, limiter } from '../config.js';
+import { getOS, getDeviceType } from '../config.js';
 
 const router = express.Router();
+const urlDatabase = {};
 
 router.use(bodyParser.json({ urlencoded: true }));
 
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    message: 'Too many requests, please try again after 15 minutes.'
+});
+
 /**
  * @swagger
- * /shorten:
+ * /api/shorten:
  *   post:
  *     summary: Shorten a URL
  *     description: Create a short URL for the given long URL.
  *     tags: [URL Shortener]
+ *     security:
+ *       - cookieAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -48,11 +58,7 @@ router.use(bodyParser.json({ urlencoded: true }));
  *       400:
  *         description: Bad request.
  */
-router.post('/shorten', async (req, res) => {
-    let queryResult;
-    if (!req.isAuthenticated || !req.isAuthenticated()) {
-        return res.redirect('/auth/google');
-    }
+router.post('/shorten', limiter, async (req, res) => {
     const { url, customAlias, topic } = req.body;
     let id = customAlias;
     if (!url) {
@@ -61,21 +67,25 @@ router.post('/shorten', async (req, res) => {
     if (!customAlias) {
         id = nanoid(8);
     }
+    urlDatabase[id] = url;
     try {
-        queryResult = await sql`INSERT INTO urlshortener.url_data(alias, originalurl, created_by, topic) VALUES(${id}, ${url}, ${user_email}, ${topic}) Returning *`;
+        await sql`INSERT INTO urlshortener.url_data(alias, originalurl, created_by, topic) VALUES(${id}, ${url}, ${user_email}, ${topic})`;
+        await setAsync(id, url);
     } catch (error) {
         return res.status(400).json({ error: 'Same name alias already exists' });
     }
-    res.status(201).json({ shortUrl: `http://localhost:3000/urls/${id}`, created_at: queryResult[0].created_at });
+    res.status(201).json({ id, shortUrl: `http://localhost:3000/urls/${id}`, originalUrl: url });
 });
 
 /**
  * @swagger
- * /shorten/{alias}:
+ * /api/shorten/{alias}:
  *   get:
  *     summary: Redirect to the original URL
  *     description: Redirect to the original URL based on the short URL alias.
  *     tags: [URL Shortener]
+ *     security:
+ *       - cookieAuth: []
  *     parameters:
  *       - in: path
  *         name: alias
@@ -90,22 +100,26 @@ router.post('/shorten', async (req, res) => {
  *         description: Alias not found.
  */
 router.get('/shorten/:alias', async (req, res) => {
-    if (!req.isAuthenticated || !req.isAuthenticated()) {
-        return res.redirect('/auth/google');
-    }
     const { alias } = req.params;
     try {
-        const result = await sql`SELECT originalurl FROM urlshortener.url_data WHERE alias = ${alias}`;
-        if (result.length === 0) {
-            return res.status(404).json({ error: 'Alias not found' });
+        let originalUrl = await getAsync(alias);
+        if (!originalUrl) {
+            const result = await sql`SELECT originalurl FROM urlshortener.url_data WHERE alias = ${alias}`;
+            if (result.length === 0) {
+                return res.status(404).json({ error: 'Alias not found' });
+            }
+            originalUrl = result[0].originalurl;
+            await setAsync(alias, originalUrl);
         }
-        const originalUrl = result[0].originalurl;
 
         const timestamp = new Date().toISOString();
         const userAgent = req.headers['user-agent'];
         const ipAddress = req.ip;
         const osType = getOS(userAgent);
         const deviceType = getDeviceType(userAgent);
+        // Geolocation data can be obtained using an external API, e.g., ipstack or ipinfo
+        // For simplicity, we'll just log the IP address here
+        console.log(`Redirect event: ${timestamp}, ${userAgent}, ${ipAddress}`);
 
         await sql`INSERT INTO urlshortener.analytics(alias, timestamp, user_agent, ip_address, os_name, device_type) VALUES(${alias}, ${timestamp}, ${userAgent}, ${ipAddress}, ${osType}, ${deviceType})`;
         res.redirect(originalUrl);

@@ -17,6 +17,21 @@ const options = {
                 url: 'http://localhost:3000',
             },
         ],
+        components: {
+            securitySchemes: {
+                cookieAuth: {
+                    type: 'apiKey',
+                    in: 'cookie',
+                    name: 'connect.sid',
+                    description: 'Session cookie for authentication',
+                },
+            },
+        },
+        security: [
+            {
+                cookieAuth: [],
+            },
+        ],
     },
     apis: ['./routes/*.js'],
 };
