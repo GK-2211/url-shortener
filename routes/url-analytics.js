@@ -235,7 +235,7 @@ router.get('/analytics/topic/:topic', ensureAuthenticated, async (req, res) => {
             clickCount: row.clickcount
         }));
         const urls = urlsResult.map(row => ({
-            shortUrl: `${process.env.BASE_URL}:${process.env.PORT}/shorten/${row.alias}`,
+            shortUrl: `${process.env.BASE_URL}/shorten/${row.alias}`,
             totalClicks: row.totalclicks,
             uniqueUsers: row.uniqueusers
         }));
