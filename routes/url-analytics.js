@@ -1,7 +1,8 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import sql from '../database/db.js';
-import {user_email } from '../auth.js';
+import { user_email } from '../auth.js';
+import client from '../redis.js';
 
 const router = express.Router();
 
@@ -65,6 +66,12 @@ router.use(bodyParser.json({ urlencoded: true }));
 router.get('/analytics/:alias', async (req, res) => {
     const { alias } = req.params;
     try {
+        const cacheKey = `analytics:${alias}`;
+        let analyticsData = await client.get(cacheKey);
+        if (analyticsData) {
+            return res.json(JSON.parse(analyticsData));
+        }
+
         const totalClicksResult = await sql`SELECT COUNT(*) AS totalClicks FROM urlshortener.analytics WHERE alias = ${alias}`;
         const uniqueUsersResult = await sql`SELECT COUNT(DISTINCT ip_address) AS uniqueUsers FROM urlshortener.analytics WHERE alias = ${alias}`;
         const clicksByDateResult = await sql`
@@ -103,7 +110,7 @@ router.get('/analytics/:alias', async (req, res) => {
             uniqueClicks: row.uniqueclicks,
             uniqueUsers: row.uniqueusers
         }));
-        const analyticsData = {
+        analyticsData = {
             totalClicks,
             uniqueUsers,
             clicksByDate,
@@ -111,11 +118,14 @@ router.get('/analytics/:alias', async (req, res) => {
             deviceType
         };
 
+        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 }); // Cache the result for 1 hour
+
         res.json(analyticsData);
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
 /**
  * @swagger
  * /analytics/topic/{topic}:
@@ -172,6 +182,12 @@ router.get('/analytics/:alias', async (req, res) => {
 router.get('/analytics/topic/:topic', async (req, res) => {
     const { topic } = req.params;
     try {
+        const cacheKey = `analytics:topic:${topic}`;
+        let analyticsData = await client.get(cacheKey);
+        if (analyticsData) {
+            return res.json(JSON.parse(analyticsData));
+        }
+
         const totalClicksResult = await sql`
             SELECT COUNT(*) AS totalClicks
             FROM urlshortener.analytics
@@ -224,18 +240,21 @@ router.get('/analytics/topic/:topic', async (req, res) => {
             uniqueUsers: row.uniqueusers
         }));
 
-        const analyticsData = {
+        analyticsData = {
             totalClicks,
             uniqueUsers,
             clicksByDate,
             urls
         };
 
+        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 }); // Cache the result for 1 hour
+
         res.json(analyticsData);
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
 /**
  * @swagger
  * /api/analytics/overall:
@@ -297,6 +316,12 @@ router.get('/analytics/topic/:topic', async (req, res) => {
  */
 router.get('/analytics/overall', async (req, res) => {
     try {
+        const cacheKey = `analytics:overall:${user_email}`;
+        let analyticsData = await client.get(cacheKey);
+        if (analyticsData) {
+            return res.json(JSON.parse(analyticsData));
+        }
+
         const totalUrlsResult = await sql`
             SELECT COUNT(*) AS totalUrls
             FROM urlshortener.url_data
@@ -370,7 +395,7 @@ router.get('/analytics/overall', async (req, res) => {
             uniqueUsers: row.uniqueusers
         }));
 
-        const analyticsData = {
+        analyticsData = {
             totalUrls,
             totalClicks,
             uniqueUsers,
@@ -378,6 +403,8 @@ router.get('/analytics/overall', async (req, res) => {
             osType,
             deviceType
         };
+
+        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 }); // Cache the result for 1 hour
 
         res.json(analyticsData);
     } catch (error) {

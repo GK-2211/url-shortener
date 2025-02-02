@@ -2,10 +2,10 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import sql from '../database/db.js';
 import rateLimit from 'express-rate-limit';
-import { getAsync, setAsync } from '../redis.js';
 import { nanoid } from 'nanoid';
 import { user_email } from '../auth.js';
 import { getOS, getDeviceType } from '../config.js';
+import client from '../redis.js';
 
 const router = express.Router();
 const urlDatabase = {};
@@ -70,7 +70,8 @@ router.post('/shorten', limiter, async (req, res) => {
     urlDatabase[id] = url;
     try {
         await sql`INSERT INTO urlshortener.url_data(alias, originalurl, created_by, topic) VALUES(${id}, ${url}, ${user_email}, ${topic})`;
-        await setAsync(id, url);
+        await client.set(id, url); // Cache the short URL
+        await client.set(url, id); // Cache the long URL
     } catch (error) {
         return res.status(400).json({ error: 'Same name alias already exists' });
     }
@@ -102,14 +103,14 @@ router.post('/shorten', limiter, async (req, res) => {
 router.get('/shorten/:alias', async (req, res) => {
     const { alias } = req.params;
     try {
-        let originalUrl = await getAsync(alias);
+        let originalUrl = await client.get(alias); // Check cache first
         if (!originalUrl) {
             const result = await sql`SELECT originalurl FROM urlshortener.url_data WHERE alias = ${alias}`;
             if (result.length === 0) {
                 return res.status(404).json({ error: 'Alias not found' });
             }
             originalUrl = result[0].originalurl;
-            await setAsync(alias, originalUrl);
+            await client.set(alias, originalUrl); // Cache the result
         }
 
         const timestamp = new Date().toISOString();
