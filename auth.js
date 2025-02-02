@@ -22,7 +22,7 @@ app.use(passport.session());
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL}:${process.env.PORT}/auth/google/callback`
+    callbackURL: `${process.env.BASE_URL}/auth/google/callback`
 }, (accessToken, refreshToken, profile, done) => {
     user_email = profile.emails[0].value;
     token = accessToken;

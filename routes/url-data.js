@@ -75,7 +75,7 @@ router.post('/shorten', ensureAuthenticated, limiter, async (req, res) => {
     } catch (error) {
         return res.status(400).json({ error: 'Same name alias already exists' });
     }
-    res.status(201).json({ id, shortUrl: `${process.env.BASE_URL}:${process.env.PORT}/shorten/${id}`, originalUrl: url });
+    res.status(201).json({ id, shortUrl: `${process.env.BASE_URL}/shorten/${id}`, originalUrl: url });
 });
 
 /**
