@@ -22,7 +22,7 @@ app.use(passport.session());
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/callback"
+    callbackURL: `${process.env.BASE_URL}:${process.env.PORT}/auth/google/callback`
 }, (accessToken, refreshToken, profile, done) => {
     user_email = profile.emails[0].value;
     token = accessToken;
@@ -48,4 +48,11 @@ app.get('/auth/google/callback',
     }
 );
 
-export { app as authApp, user_email, token };
+function ensureAuthenticated(req, res, next) {
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    res.redirect('/');
+}
+
+export { app as authApp, user_email, token, ensureAuthenticated };
