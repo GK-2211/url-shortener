@@ -1,13 +1,25 @@
-import redis from 'redis';
-import { promisify } from 'util';
+import { createClient } from 'redis';
+import dotenv from 'dotenv';
 
 
-const redisClient = redis.createClient();
+dotenv.config();
 
-redisClient.on('error', (err) => {
-    console.error('Redis client error:', err);
+const client = createClient({
+    username: process.env.REDIS_USERNAME,
+    password: process.env.REDIS_PASSWORD,
+    socket: {
+        host: process.env.REDIS_HOST,
+        port: process.env.REDIS_PORT
+    }
 });
 
-export const getAsync = promisify(redisClient.get).bind(redisClient);
-export const setAsync = promisify(redisClient.set).bind(redisClient);
+const connectRedis = async () => {
+    await client.connect();
+    console.log("Connected to Redis Cloud");
+
+};
+
+connectRedis();
+
+export default client;
 
