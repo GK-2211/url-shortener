@@ -3,7 +3,7 @@ import bodyParser from 'body-parser';
 import sql from '../database/db.js';
 import rateLimit from 'express-rate-limit';
 import { nanoid } from 'nanoid';
-import { user_email } from '../auth.js';
+import { user_email, ensureAuthenticated } from '../auth.js';
 import { getOS, getDeviceType } from '../config.js';
 import client from '../redis.js';
 
@@ -13,8 +13,8 @@ const urlDatabase = {};
 router.use(bodyParser.json({ urlencoded: true }));
 
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each IP to 5 requests per windowMs
+    windowMs: 15 * 60 * 1000, 
+    max: 5, 
     message: 'Too many requests, please try again after 15 minutes.'
 });
 
@@ -58,7 +58,7 @@ const limiter = rateLimit({
  *       400:
  *         description: Bad request.
  */
-router.post('/shorten', limiter, async (req, res) => {
+router.post('/shorten', ensureAuthenticated, limiter, async (req, res) => {
     const { url, customAlias, topic } = req.body;
     let id = customAlias;
     if (!url) {
@@ -70,12 +70,12 @@ router.post('/shorten', limiter, async (req, res) => {
     urlDatabase[id] = url;
     try {
         await sql`INSERT INTO urlshortener.url_data(alias, originalurl, created_by, topic) VALUES(${id}, ${url}, ${user_email}, ${topic})`;
-        await client.set(id, url); // Cache the short URL
-        await client.set(url, id); // Cache the long URL
+        await client.set(id, url);
+        await client.set(url, id);
     } catch (error) {
         return res.status(400).json({ error: 'Same name alias already exists' });
     }
-    res.status(201).json({ id, shortUrl: `http://localhost:3000/urls/${id}`, originalUrl: url });
+    res.status(201).json({ id, shortUrl: `${process.env.BASE_URL}:${process.env.PORT}/shorten/${id}`, originalUrl: url });
 });
 
 /**
@@ -100,17 +100,17 @@ router.post('/shorten', limiter, async (req, res) => {
  *       404:
  *         description: Alias not found.
  */
-router.get('/shorten/:alias', async (req, res) => {
+router.get('/shorten/:alias', ensureAuthenticated, async (req, res) => {
     const { alias } = req.params;
     try {
-        let originalUrl = await client.get(alias); // Check cache first
+        let originalUrl = await client.get(alias); 
         if (!originalUrl) {
             const result = await sql`SELECT originalurl FROM urlshortener.url_data WHERE alias = ${alias}`;
             if (result.length === 0) {
                 return res.status(404).json({ error: 'Alias not found' });
             }
             originalUrl = result[0].originalurl;
-            await client.set(alias, originalUrl); // Cache the result
+            await client.set(alias, originalUrl);
         }
 
         const timestamp = new Date().toISOString();
@@ -118,10 +118,6 @@ router.get('/shorten/:alias', async (req, res) => {
         const ipAddress = req.ip;
         const osType = getOS(userAgent);
         const deviceType = getDeviceType(userAgent);
-        // Geolocation data can be obtained using an external API, e.g., ipstack or ipinfo
-        // For simplicity, we'll just log the IP address here
-        console.log(`Redirect event: ${timestamp}, ${userAgent}, ${ipAddress}`);
-
         await sql`INSERT INTO urlshortener.analytics(alias, timestamp, user_agent, ip_address, os_name, device_type) VALUES(${alias}, ${timestamp}, ${userAgent}, ${ipAddress}, ${osType}, ${deviceType})`;
         res.redirect(originalUrl);
     } catch (error) {

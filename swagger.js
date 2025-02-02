@@ -14,7 +14,7 @@ const options = {
         },
         servers: [
             {
-                url: 'http://localhost:3000',
+                url: `${process.env.BASE_URL}:${process.env.PORT}`
             },
         ],
         components: {

@@ -1,7 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import sql from '../database/db.js';
-import { user_email } from '../auth.js';
+import { user_email, ensureAuthenticated } from '../auth.js';
 import client from '../redis.js';
 
 const router = express.Router();
@@ -63,7 +63,7 @@ router.use(bodyParser.json({ urlencoded: true }));
  *       500:
  *         description: Internal server error.
  */
-router.get('/analytics/:alias', async (req, res) => {
+router.get('/analytics/:alias', ensureAuthenticated, async (req, res) => {
     const { alias } = req.params;
     try {
         const cacheKey = `analytics:${alias}`;
@@ -118,7 +118,7 @@ router.get('/analytics/:alias', async (req, res) => {
             deviceType
         };
 
-        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 }); // Cache the result for 1 hour
+        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 });
 
         res.json(analyticsData);
     } catch (error) {
@@ -179,7 +179,7 @@ router.get('/analytics/:alias', async (req, res) => {
  *       500:
  *         description: Internal server error.
  */
-router.get('/analytics/topic/:topic', async (req, res) => {
+router.get('/analytics/topic/:topic', ensureAuthenticated, async (req, res) => {
     const { topic } = req.params;
     try {
         const cacheKey = `analytics:topic:${topic}`;
@@ -235,7 +235,7 @@ router.get('/analytics/topic/:topic', async (req, res) => {
             clickCount: row.clickcount
         }));
         const urls = urlsResult.map(row => ({
-            shortUrl: `http://localhost:3000/urls/${row.alias}`,
+            shortUrl: `${process.env.BASE_URL}:${process.env.PORT}/shorten/${row.alias}`,
             totalClicks: row.totalclicks,
             uniqueUsers: row.uniqueusers
         }));
@@ -247,7 +247,7 @@ router.get('/analytics/topic/:topic', async (req, res) => {
             urls
         };
 
-        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 }); // Cache the result for 1 hour
+        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 });
 
         res.json(analyticsData);
     } catch (error) {
@@ -314,7 +314,7 @@ router.get('/analytics/topic/:topic', async (req, res) => {
  *       500:
  *         description: Internal server error.
  */
-router.get('/analytics/overall', async (req, res) => {
+router.get('/analytics/overall', ensureAuthenticated, async (req, res) => {
     try {
         const cacheKey = `analytics:overall:${user_email}`;
         let analyticsData = await client.get(cacheKey);
@@ -404,7 +404,7 @@ router.get('/analytics/overall', async (req, res) => {
             deviceType
         };
 
-        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 }); // Cache the result for 1 hour
+        await client.set(cacheKey, JSON.stringify(analyticsData), { EX: 3600 }); 
 
         res.json(analyticsData);
     } catch (error) {
